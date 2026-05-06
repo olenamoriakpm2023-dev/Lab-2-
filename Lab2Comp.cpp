@@ -49,36 +49,51 @@ DWORD WINAPI ThreadFunction(LPVOID lpParam) {
         fileName = "result_critical_section.txt";
     }
 
-    for (int i = 1; i <= 500; i++) {
-        int value = params->positive ? i : -i;
+    // MODE 1 — без синхронізації
+    if (params->mode == 1) {
+        ofstream file(fileName, ios::app);
 
-        if (params->mode == 1) {
-            ofstream file(fileName, ios::app);
+        for (int i = 1; i <= 500; i++) {
+            int value = params->positive ? i : -i;
             WriteNumberToFile(file, params, value);
-            file.close();
+            Sleep(3);
         }
 
-        else if (params->mode == 2) {
-            WaitForSingleObject(params->writeEvent, INFINITE);
+        file.close();
+    }
 
-            ofstream file(fileName, ios::app);
+    // MODE 2 — синхронізація через подію
+    else if (params->mode == 2) {
+        WaitForSingleObject(params->writeEvent, INFINITE);
+
+        ofstream file(fileName, ios::app);
+
+        for (int i = 1; i <= 500; i++) {
+            int value = params->positive ? i : -i;
             WriteNumberToFile(file, params, value);
-            file.close();
-
-            SetEvent(params->writeEvent);
+            Sleep(3);
         }
 
-        else if (params->mode == 3) {
-            EnterCriticalSection(&cs);
+        file.close();
 
-            ofstream file(fileName, ios::app);
+        SetEvent(params->writeEvent);
+    }
+
+    // MODE 3 — синхронізація через критичну секцію
+    else if (params->mode == 3) {
+        EnterCriticalSection(&cs);
+
+        ofstream file(fileName, ios::app);
+
+        for (int i = 1; i <= 500; i++) {
+            int value = params->positive ? i : -i;
             WriteNumberToFile(file, params, value);
-            file.close();
-
-            LeaveCriticalSection(&cs);
+            Sleep(3);
         }
 
-        Sleep(5);
+        file.close();
+
+        LeaveCriticalSection(&cs);
     }
 
     EnterCriticalSection(&cs);
@@ -155,6 +170,13 @@ void RunMode(int mode) {
         NULL
     );
 
+    if (writeEvent == NULL) {
+        cout << "CreateEvent writeEvent error: " << GetLastError() << endl;
+        UnmapViewOfFile(sharedData);
+        CloseHandle(hMapFile);
+        return;
+    }
+
     ThreadParams params[TOTAL_THREADS];
 
     for (int i = 0; i < PAIRS; i++) {
@@ -164,6 +186,11 @@ void RunMode(int mode) {
             FALSE,
             NULL
         );
+
+        if (startEvents[i] == NULL) {
+            cout << "CreateEvent startEvent error: " << GetLastError() << endl;
+            return;
+        }
     }
 
     int index = 0;
@@ -252,6 +279,8 @@ int main() {
 
     cout << endl;
     cout << "All modes finished successfully." << endl;
+
+    system("pause");
 
     return 0;
 }
